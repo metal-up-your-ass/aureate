@@ -4,7 +4,7 @@
 
 *Gild the orchestra — tape and console saturation glue for strings, brass and layers.*
 
-[![CI](https://github.com/metal-up-your-ass/aureate/actions/workflows/ci.yml/badge.svg)](https://github.com/metal-up-your-ass/aureate/actions/workflows/ci.yml)
+[![CI](https://github.com/basilica-audio/aureate/actions/workflows/ci.yml/badge.svg)](https://github.com/basilica-audio/aureate/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 > **Work in progress.** Aureate is pre-1.0 and under active development. There are no built binaries or releases yet — building from source is currently the only way to run it. Expect breaking changes until v1.0.0 ships (see [Roadmap](#roadmap)).
@@ -44,7 +44,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full diagram, latency
 
 ## Roadmap
 
-Tracked as GitHub milestones and issues (M1 DSP & tests · M2 presets/state · M3 GUI & a11y · M4 release/signing/v1.0.0). Read them with `gh issue list` / `gh api repos/metal-up-your-ass/aureate/milestones`. The current GUI is a functional v0.1 slider editor; a custom vector-drawn LookAndFeel is a later milestone.
+Tracked as GitHub milestones and issues (M1 DSP & tests · M2 presets/state · M3 GUI & a11y · M4 release/signing/v1.0.0). Read them with `gh issue list` / `gh api repos/basilica-audio/aureate/milestones`. The current GUI is a functional v0.1 slider editor; a custom vector-drawn LookAndFeel is a later milestone.
 <!-- ==END BODY== -->
 
 ## Installation
