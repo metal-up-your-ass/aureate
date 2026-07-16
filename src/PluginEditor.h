@@ -2,6 +2,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "presets/PresetBar.h"
+
 class AureateAudioProcessor;
 
 // A simple, functional v0.1 editor: one rotary slider per float parameter
@@ -43,8 +45,16 @@ private:
 
     AureateAudioProcessor& audioProcessor;
 
-    // In signal-flow order (see docs/architecture.md).
-    Knob wowFlutterKnob;
+    // M2 preset system (src/presets/PresetBar.h) - a horizontal strip
+    // docked at the top of the editor. Constructed after the localisation
+    // frame is installed (see the constructor) so its TRANS()'d strings
+    // pick up the right language from the very first paint.
+    basilica::presets::PresetBar presetBar;
+
+    // In signal-flow order (see docs/architecture.md). Wow and Flutter are
+    // independent parameters as of v0.2.0 (docs/design-brief.md §3.6).
+    Knob wowKnob;
+    Knob flutterKnob;
     Knob driveKnob;
     Knob warmthKnob;
     Knob biasKnob;

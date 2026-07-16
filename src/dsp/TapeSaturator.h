@@ -32,29 +32,34 @@ namespace TapeSaturator
     // See docs/manual.md for the musical description of each.
     enum class Model
     {
-        tape,    // asymmetric tanh - smooth, "infinite" soft compression (the original/default model)
-        console, // asymmetric cubic soft-clip - harder-edged, more transparent below the clip point
-        valve    // asymmetric exponential saturation - a different even/odd harmonic blend than tape
+        tape,    // asymmetric tanh - smooth, "infinite" soft compression, the most odd-harmonic-dominant/least asymmetric of the three (the original/default model)
+        console, // asymmetric scaled-tanh soft knee - transparent at low-to-moderate levels, blended even/odd harmonics once pushed (v0.2.0: replaces v0.1's hard-flat cubic soft-clip)
+        valve    // asymmetric exponential saturation - the most asymmetric/even-harmonic-forward of the three
     };
 
     namespace detail
     {
-        // Cubic soft-clip (a standard textbook soft-clipper, e.g. Zolzer's
-        // DAFX): odd, monotonically non-decreasing, hard-flat beyond +/-1
-        // rather than tanh's smooth asymptote - a more "console summing bus"
-        // character than tape's continuous compression.
-        inline float cubicSoftClip (float v) noexcept
+        // Console: a scaled tanh-family soft knee (research notes §4 - real
+        // console/transformer summing-bus saturation is a soft, blended
+        // even+odd knee, not the hardest-clipping of the three models, so it
+        // should stay closer to linear for longer than Tape's plain tanh(x)
+        // before curving away). consoleSoftKneeScale > 1 keeps unity slope at
+        // the origin (matching Tape/Valve's small-signal gain) while its
+        // cubic Taylor coefficient (1/(3*scale^2)) is smaller than tanh's
+        // own 1/3, i.e. genuinely more transparent at low-to-moderate levels
+        // - only showing character once driven well past unity, per the
+        // brief's "least characterful until pushed" reordering (replaces
+        // v0.1's hard-flat cubic soft-clip, which inverted this ordering).
+        inline constexpr float consoleSoftKneeScale = 2.0f;
+
+        inline float consoleSoftKnee (float v) noexcept
         {
-            if (v <= -1.0f)
-                return -2.0f / 3.0f;
-            if (v >= 1.0f)
-                return 2.0f / 3.0f;
-            return v - (v * v * v) / 3.0f;
+            return consoleSoftKneeScale * std::tanh (v / consoleSoftKneeScale);
         }
 
-        // Exponential saturation: strictly monotonic (never flat, unlike the
-        // cubic clip above) and asymptotic to +/-1, giving a different
-        // even/odd harmonic blend than either the tanh or cubic curves.
+        // Exponential saturation: strictly monotonic and asymptotic to
+        // +/-1, giving a different even/odd harmonic blend than either the
+        // tanh or the console soft-knee curves.
         inline float exponentialSoftClip (float v) noexcept
         {
             return std::copysign (1.0f - std::exp (-std::abs (v)), v);
@@ -78,7 +83,7 @@ namespace TapeSaturator
         switch (model)
         {
             case Model::console:
-                return detail::cubicSoftClip (x + bias) - detail::cubicSoftClip (bias);
+                return detail::consoleSoftKnee (x + bias) - detail::consoleSoftKnee (bias);
             case Model::valve:
                 return detail::exponentialSoftClip (x + bias) - detail::exponentialSoftClip (bias);
             case Model::tape:

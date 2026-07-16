@@ -59,7 +59,8 @@ TEST_CASE ("Warmth low-pass smoother converges within one smoothingTimeSeconds o
     engine.setDriveDb (0.0f);
     engine.setToneProportion (0.0f);
     engine.setBiasProportion (0.0f);
-    engine.setWowFlutterProportion (0.0f);
+    engine.setWowProportion (0.0f);
+    engine.setFlutterProportion (0.0f);
     engine.setHissProportion (0.0f);
     engine.setHfTrimDb (0.0f);
     engine.setLfTrimDb (0.0f);

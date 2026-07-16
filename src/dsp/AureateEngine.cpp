@@ -23,10 +23,19 @@ namespace
     }
 
     // Warmth (0-1) -> saturator bias, linear from 0 (symmetric) to
-    // maxBias (maximally asymmetric).
+    // maxBias (maximally asymmetric). maxBias is now Character-dependent
+    // (see AureateEngine::characterMaxWarmthBias()), not a single shared
+    // constant.
     float mapWarmthToBias (float proportion01, float maxBias) noexcept
     {
         return juce::jlimit (0.0f, 1.0f, proportion01) * maxBias;
+    }
+
+    // Warmth (0-1) -> LF head-bump gain in dB, linear from 0 dB to
+    // headBumpMaxDb.
+    float mapWarmthToHeadBumpDb (float proportion01, float headBumpMaxDb) noexcept
+    {
+        return juce::jlimit (0.0f, 1.0f, proportion01) * headBumpMaxDb;
     }
 
     // Bias (-1 to 1) -> additional saturator bias contribution, linear.
@@ -112,10 +121,20 @@ void AureateEngine::prepare (const juce::dsp::ProcessSpec& spec)
     oversampledSpec.numChannels = spec.numChannels;
 
     warmthLowPass.prepare (oversampledSpec);
+    headBumpPeak.prepare (oversampledSpec);
     tiltLowShelf.prepare (oversampledSpec);
     tiltHighShelf.prepare (oversampledSpec);
     hfTrimShelf.prepare (oversampledSpec);
     lfTrimShelf.prepare (oversampledSpec);
+    hissShelf.prepare (oversampledSpec);
+
+    // Hiss's noise tap is generated and shaped in its own scratch buffer
+    // (see AureateEngine.h) before being added into the wet block - sized to
+    // the largest oversampled block prepare() declares, allocated here
+    // (never on the audio thread) and never resized in process().
+    hissScratchBuffer.setSize (static_cast<int> (spec.numChannels),
+                                static_cast<int> (oversampledSpec.maximumBlockSize),
+                                false, false, true);
 
     outputGain.setRampDurationSeconds (smoothingTimeSeconds);
     outputGain.prepare (spec);
@@ -138,8 +157,9 @@ void AureateEngine::prepare (const juce::dsp::ProcessSpec& spec)
     // defaults on first prepare) - otherwise the ramp would sweep up from a
     // default-constructed 0 on the very first block.
     const auto warmthLowPassHz = mapWarmthToLowPassHz (lastWarmthProportion01, warmthMinLowPassHz, warmthMaxLowPassHz);
-    const auto warmthBias = mapWarmthToBias (lastWarmthProportion01, warmthMaxBias);
+    const auto warmthBias = mapWarmthToBias (lastWarmthProportion01, characterMaxWarmthBias (character));
     const auto explicitBias = mapExplicitBiasToBias (lastBiasProportion, maxExplicitBias);
+    const auto headBumpDb = mapWarmthToHeadBumpDb (lastWarmthProportion01, headBumpMaxDb);
     const auto tiltDb = mapTiltToDb (lastTiltProportion, maxTiltDb);
 
     // Reset at the host sampleRate, NOT oversampledRate: process() below
@@ -162,12 +182,16 @@ void AureateEngine::prepare (const juce::dsp::ProcessSpec& spec)
     warmthBiasSmoothed.setCurrentAndTargetValue (warmthBias);
     explicitBiasSmoothed.reset (sampleRate, smoothingTimeSeconds);
     explicitBiasSmoothed.setCurrentAndTargetValue (explicitBias);
+    headBumpDbSmoothed.reset (sampleRate, smoothingTimeSeconds);
+    headBumpDbSmoothed.setCurrentAndTargetValue (headBumpDb);
     tiltDbSmoothed.reset (sampleRate, smoothingTimeSeconds);
     tiltDbSmoothed.setCurrentAndTargetValue (tiltDb);
     mixSmoothed.reset (sampleRate, smoothingTimeSeconds);
     mixSmoothed.setCurrentAndTargetValue (lastMixProportion);
-    wowFlutterAmountSmoothed.reset (sampleRate, smoothingTimeSeconds);
-    wowFlutterAmountSmoothed.setCurrentAndTargetValue (lastWowFlutterProportion01);
+    wowAmountSmoothed.reset (sampleRate, smoothingTimeSeconds);
+    wowAmountSmoothed.setCurrentAndTargetValue (lastWowProportion01);
+    flutterAmountSmoothed.reset (sampleRate, smoothingTimeSeconds);
+    flutterAmountSmoothed.setCurrentAndTargetValue (lastFlutterProportion01);
     hissAmountSmoothed.reset (sampleRate, smoothingTimeSeconds);
     hissAmountSmoothed.setCurrentAndTargetValue (lastHissProportion01);
     hfTrimDbSmoothed.reset (sampleRate, smoothingTimeSeconds);
@@ -182,6 +206,8 @@ void AureateEngine::prepare (const juce::dsp::ProcessSpec& spec)
     // than an identity/uninitialised state.
     *warmthLowPass.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass (
         oversampledRate, clampBelowNyquist (warmthLowPassHz, oversampledRate), filterQ);
+    *headBumpPeak.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
+        oversampledRate, clampBelowNyquist (headBumpHz, oversampledRate), headBumpQ, juce::Decibels::decibelsToGain (headBumpDb));
     *tiltLowShelf.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf (
         oversampledRate, clampBelowNyquist (tiltLowShelfHz, oversampledRate), filterQ, juce::Decibels::decibelsToGain (-tiltDb));
     *tiltHighShelf.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf (
@@ -190,6 +216,17 @@ void AureateEngine::prepare (const juce::dsp::ProcessSpec& spec)
         oversampledRate, clampBelowNyquist (hfTrimHz, oversampledRate), filterQ, juce::Decibels::decibelsToGain (lastHfTrimDb));
     *lfTrimShelf.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf (
         oversampledRate, clampBelowNyquist (lfTrimHz, oversampledRate), filterQ, juce::Decibels::decibelsToGain (lastLfTrimDb));
+
+    // hissShelf is a fixed filter (its coefficients never depend on a live
+    // parameter - see AureateEngine.h), so it is primed once here and never
+    // recomputed in process().
+    *hissShelf.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf (
+        oversampledRate, clampBelowNyquist (hissShelfHz, oversampledRate), filterQ, juce::Decibels::decibelsToGain (hissShelfDb));
+}
+
+void AureateEngine::updateWarmthBiasTarget()
+{
+    warmthBiasSmoothed.setTargetValue (mapWarmthToBias (lastWarmthProportion01, characterMaxWarmthBias (character)));
 }
 
 void AureateEngine::reset()
@@ -204,10 +241,12 @@ void AureateEngine::reset()
         oversampler->reset();
 
     warmthLowPass.reset();
+    headBumpPeak.reset();
     tiltLowShelf.reset();
     tiltHighShelf.reset();
     hfTrimShelf.reset();
     lfTrimShelf.reset();
+    hissShelf.reset();
     outputGain.reset();
     dryWetMixer.reset();
 
@@ -226,7 +265,8 @@ void AureateEngine::setWarmthProportion (float newProportion01)
 {
     lastWarmthProportion01 = newProportion01;
     warmthLowPassHzSmoothed.setTargetValue (mapWarmthToLowPassHz (newProportion01, warmthMinLowPassHz, warmthMaxLowPassHz));
-    warmthBiasSmoothed.setTargetValue (mapWarmthToBias (newProportion01, warmthMaxBias));
+    updateWarmthBiasTarget();
+    headBumpDbSmoothed.setTargetValue (mapWarmthToHeadBumpDb (newProportion01, headBumpMaxDb));
 }
 
 void AureateEngine::setToneProportion (float newProportionMinus1To1)
@@ -252,10 +292,16 @@ void AureateEngine::setBiasProportion (float newProportionMinus1To1)
     explicitBiasSmoothed.setTargetValue (mapExplicitBiasToBias (newProportionMinus1To1, maxExplicitBias));
 }
 
-void AureateEngine::setWowFlutterProportion (float newProportion01)
+void AureateEngine::setWowProportion (float newProportion01)
 {
-    lastWowFlutterProportion01 = newProportion01;
-    wowFlutterAmountSmoothed.setTargetValue (juce::jlimit (0.0f, 1.0f, newProportion01));
+    lastWowProportion01 = newProportion01;
+    wowAmountSmoothed.setTargetValue (juce::jlimit (0.0f, 1.0f, newProportion01));
+}
+
+void AureateEngine::setFlutterProportion (float newProportion01)
+{
+    lastFlutterProportion01 = newProportion01;
+    flutterAmountSmoothed.setTargetValue (juce::jlimit (0.0f, 1.0f, newProportion01));
 }
 
 void AureateEngine::setHissProportion (float newProportion01)
@@ -267,6 +313,7 @@ void AureateEngine::setHissProportion (float newProportion01)
 void AureateEngine::setCharacter (TapeSaturator::Model newModel)
 {
     character = newModel;
+    updateWarmthBiasTarget();
 }
 
 void AureateEngine::setHfTrimDb (float newTrimDb)
@@ -324,9 +371,11 @@ void AureateEngine::process (juce::dsp::AudioBlock<float>& block)
         warmthLowPassHzSmoothed.skip (static_cast<int> (numSamples)), oversampledRate);
     const auto warmthBias = warmthBiasSmoothed.skip (static_cast<int> (numSamples));
     const auto explicitBias = explicitBiasSmoothed.skip (static_cast<int> (numSamples));
+    const auto headBumpDb = headBumpDbSmoothed.skip (static_cast<int> (numSamples));
     const auto tiltDb = tiltDbSmoothed.skip (static_cast<int> (numSamples));
     const auto wetMix = mixSmoothed.skip (static_cast<int> (numSamples));
-    const auto wowFlutterAmount = wowFlutterAmountSmoothed.skip (static_cast<int> (numSamples));
+    const auto wowAmount = wowAmountSmoothed.skip (static_cast<int> (numSamples));
+    const auto flutterAmount = flutterAmountSmoothed.skip (static_cast<int> (numSamples));
     const auto hissAmount = hissAmountSmoothed.skip (static_cast<int> (numSamples));
     const auto hfTrimDb = hfTrimDbSmoothed.skip (static_cast<int> (numSamples));
     const auto lfTrimDb = lfTrimDbSmoothed.skip (static_cast<int> (numSamples));
@@ -335,6 +384,8 @@ void AureateEngine::process (juce::dsp::AudioBlock<float>& block)
     const auto hissGain = hissAmount * maxHissLinearGain;
 
     *warmthLowPass.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass (oversampledRate, warmthLowPassHz, filterQ);
+    *headBumpPeak.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
+        oversampledRate, clampBelowNyquist (headBumpHz, oversampledRate), headBumpQ, juce::Decibels::decibelsToGain (headBumpDb));
     *tiltLowShelf.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf (
         oversampledRate, clampBelowNyquist (tiltLowShelfHz, oversampledRate), filterQ, juce::Decibels::decibelsToGain (-tiltDb));
     *tiltHighShelf.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf (
@@ -354,14 +405,15 @@ void AureateEngine::process (juce::dsp::AudioBlock<float>& block)
     dryWetMixer.pushDrySamples (workingBlock);
 
     // Wow/Flutter: modulated delay line at the host sample rate, ahead of
-    // Drive/oversampling (see class comment). The depth (not the base
-    // delay) scales with the smoothed amount, so amount == 0 degenerates to
-    // a plain fixed delay of wowFlutterBaseDelaySamples - exactly what
-    // getLatencySamples() already accounts for, keeping the null test valid
-    // at the default (0%) amount without any special-casing here.
+    // Drive/oversampling (see class comment). Each stage's depth (not the
+    // shared base delay) scales with its own independent smoothed amount, so
+    // both amounts at 0 degenerates to a plain fixed delay of
+    // wowFlutterBaseDelaySamples - exactly what getLatencySamples() already
+    // accounts for, keeping the null test valid at the default (0%/0%)
+    // amounts without any special-casing here.
     {
-        const auto wowDepthSamples = static_cast<double> (wowFlutterAmount) * wowFlutterMaxWowDepthSamples;
-        const auto flutterDepthSamples = static_cast<double> (wowFlutterAmount) * wowFlutterMaxFlutterDepthSamples;
+        const auto wowDepthSamples = static_cast<double> (wowAmount) * wowFlutterMaxWowDepthSamples;
+        const auto flutterDepthSamples = static_cast<double> (flutterAmount) * wowFlutterMaxFlutterDepthSamples;
 
         for (size_t sample = 0; sample < numSamples; ++sample)
         {
@@ -397,9 +449,11 @@ void AureateEngine::process (juce::dsp::AudioBlock<float>& block)
 
     // Tape-style saturation stage: gentle pre-clip HF rolloff (models tape
     // bias/self-erasure dulling highs before the nonlinearity), then the
+    // LF head-bump (tape-transport resonance, new in v0.2.0), then the
     // asymmetric saturator itself (Character-selected model, Warmth+Bias-
     // driven asymmetry).
     warmthLowPass.process (oversampledContext);
+    headBumpPeak.process (oversampledContext);
 
     for (size_t channel = 0; channel < oversampledBlock.getNumChannels(); ++channel)
     {
@@ -420,20 +474,40 @@ void AureateEngine::process (juce::dsp::AudioBlock<float>& block)
     hfTrimShelf.process (oversampledContext);
     lfTrimShelf.process (oversampledContext);
 
-    // Hiss: shaped noise mixed in last, inside the oversampled domain, so it
-    // inherits the downsampler's anti-aliasing filter below rather than
-    // needing its own explicit band-limiting filter here. Independent
-    // per-channel noise (unlike Wow/Flutter's channel-linked modulation),
-    // matching how tape hiss is typically decorrelated between the two
-    // channels of a stereo recording.
+    // Hiss: shaped noise mixed in last, inside the oversampled domain.
+    // Generated into its own scratch buffer and run through hissShelf (a
+    // fixed +4 dB-above-4kHz high-shelf, primed once in prepare() - see
+    // AureateEngine.h) before being added to the wet signal, so the noise
+    // reads as HF-forward "hiss" rather than inheriting only the
+    // downsampler's own darkening filter below (docs/design-brief.md §3.5).
+    // Independent per-channel noise (unlike Wow/Flutter's channel-linked
+    // modulation), matching how tape hiss is typically decorrelated between
+    // the two channels of a stereo recording.
     if (hissGain > 0.0f)
     {
-        for (size_t channel = 0; channel < oversampledBlock.getNumChannels(); ++channel)
+        const auto numOversampledSamples = oversampledBlock.getNumSamples();
+        const auto numOversampledChannels = oversampledBlock.getNumChannels();
+
+        for (size_t channel = 0; channel < numOversampledChannels; ++channel)
+        {
+            auto* noiseData = hissScratchBuffer.getWritePointer (static_cast<int> (channel));
+
+            for (size_t sample = 0; sample < numOversampledSamples; ++sample)
+                noiseData[sample] = (hissRandom.nextFloat() * 2.0f - 1.0f) * hissGain;
+        }
+
+        juce::dsp::AudioBlock<float> hissBlock (hissScratchBuffer);
+        auto hissWorkingBlock = hissBlock.getSubBlock (0, numOversampledSamples).getSubsetChannelBlock (0, numOversampledChannels);
+        juce::dsp::ProcessContextReplacing<float> hissContext (hissWorkingBlock);
+        hissShelf.process (hissContext);
+
+        for (size_t channel = 0; channel < numOversampledChannels; ++channel)
         {
             auto* channelData = oversampledBlock.getChannelPointer (channel);
+            const auto* noiseData = hissWorkingBlock.getChannelPointer (channel);
 
-            for (size_t sample = 0; sample < oversampledBlock.getNumSamples(); ++sample)
-                channelData[sample] += (hissRandom.nextFloat() * 2.0f - 1.0f) * hissGain;
+            for (size_t sample = 0; sample < numOversampledSamples; ++sample)
+                channelData[sample] += noiseData[sample];
         }
     }
 

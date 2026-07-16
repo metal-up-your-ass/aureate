@@ -1,0 +1,21 @@
+{
+    "format": "basilica-preset-1",
+    "plugin": "com.yvesvogl.aureate",
+    "pluginVersion": "0.2.0",
+    "name": "Choir Warmth",
+    "category": "Bus",
+    "parameters": {
+        "character": 0,
+        "drive": 4.0,
+        "warmth": 50.0,
+        "bias": 0.0,
+        "tone": -15.0,
+        "hf_trim": -1.0,
+        "lf_trim": 1.0,
+        "wow": 0.0,
+        "flutter": 0.0,
+        "hiss": 0.0,
+        "mix": 100.0,
+        "output": 0.0
+    }
+}

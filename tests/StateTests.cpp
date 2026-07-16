@@ -15,7 +15,8 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     auto* mixParam = processor.apvts.getParameter (ParamIDs::mix);
     auto* outputParam = processor.apvts.getParameter (ParamIDs::output);
     auto* biasParam = processor.apvts.getParameter (ParamIDs::bias);
-    auto* wowFlutterParam = processor.apvts.getParameter (ParamIDs::wowFlutter);
+    auto* wowParam = processor.apvts.getParameter (ParamIDs::wow);
+    auto* flutterParam = processor.apvts.getParameter (ParamIDs::flutter);
     auto* hissParam = processor.apvts.getParameter (ParamIDs::hiss);
     auto* characterParam = processor.apvts.getParameter (ParamIDs::character);
     auto* hfTrimParam = processor.apvts.getParameter (ParamIDs::hfTrim);
@@ -27,7 +28,8 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     REQUIRE (mixParam != nullptr);
     REQUIRE (outputParam != nullptr);
     REQUIRE (biasParam != nullptr);
-    REQUIRE (wowFlutterParam != nullptr);
+    REQUIRE (wowParam != nullptr);
+    REQUIRE (flutterParam != nullptr);
     REQUIRE (hissParam != nullptr);
     REQUIRE (characterParam != nullptr);
     REQUIRE (hfTrimParam != nullptr);
@@ -39,7 +41,8 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     mixParam->setValueNotifyingHost (mixParam->convertTo0to1 (63.0f));
     outputParam->setValueNotifyingHost (outputParam->convertTo0to1 (-4.5f));
     biasParam->setValueNotifyingHost (biasParam->convertTo0to1 (-25.0f));
-    wowFlutterParam->setValueNotifyingHost (wowFlutterParam->convertTo0to1 (40.0f));
+    wowParam->setValueNotifyingHost (wowParam->convertTo0to1 (40.0f));
+    flutterParam->setValueNotifyingHost (flutterParam->convertTo0to1 (65.0f));
     hissParam->setValueNotifyingHost (hissParam->convertTo0to1 (15.0f));
     characterParam->setValueNotifyingHost (characterParam->convertTo0to1 (2.0f)); // Valve
     hfTrimParam->setValueNotifyingHost (hfTrimParam->convertTo0to1 (3.0f));
@@ -51,7 +54,8 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     const auto savedMix = mixParam->getValue();
     const auto savedOutput = outputParam->getValue();
     const auto savedBias = biasParam->getValue();
-    const auto savedWowFlutter = wowFlutterParam->getValue();
+    const auto savedWow = wowParam->getValue();
+    const auto savedFlutter = flutterParam->getValue();
     const auto savedHiss = hissParam->getValue();
     const auto savedCharacter = characterParam->getValue();
     const auto savedHfTrim = hfTrimParam->getValue();
@@ -69,7 +73,8 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     mixParam->setValueNotifyingHost (mixParam->getDefaultValue());
     outputParam->setValueNotifyingHost (outputParam->getDefaultValue());
     biasParam->setValueNotifyingHost (biasParam->getDefaultValue());
-    wowFlutterParam->setValueNotifyingHost (wowFlutterParam->getDefaultValue());
+    wowParam->setValueNotifyingHost (wowParam->getDefaultValue());
+    flutterParam->setValueNotifyingHost (flutterParam->getDefaultValue());
     hissParam->setValueNotifyingHost (hissParam->getDefaultValue());
     characterParam->setValueNotifyingHost (characterParam->getDefaultValue());
     hfTrimParam->setValueNotifyingHost (hfTrimParam->getDefaultValue());
@@ -81,7 +86,8 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     REQUIRE (mixParam->getValue() != Catch::Approx (savedMix));
     REQUIRE (outputParam->getValue() != Catch::Approx (savedOutput));
     REQUIRE (biasParam->getValue() != Catch::Approx (savedBias));
-    REQUIRE (wowFlutterParam->getValue() != Catch::Approx (savedWowFlutter));
+    REQUIRE (wowParam->getValue() != Catch::Approx (savedWow));
+    REQUIRE (flutterParam->getValue() != Catch::Approx (savedFlutter));
     REQUIRE (hissParam->getValue() != Catch::Approx (savedHiss));
     REQUIRE (characterParam->getValue() != Catch::Approx (savedCharacter));
     REQUIRE (hfTrimParam->getValue() != Catch::Approx (savedHfTrim));
@@ -95,9 +101,96 @@ TEST_CASE ("State round-trip preserves non-default values of every parameter", "
     CHECK (mixParam->getValue() == Catch::Approx (savedMix).margin (1e-6));
     CHECK (outputParam->getValue() == Catch::Approx (savedOutput).margin (1e-6));
     CHECK (biasParam->getValue() == Catch::Approx (savedBias).margin (1e-6));
-    CHECK (wowFlutterParam->getValue() == Catch::Approx (savedWowFlutter).margin (1e-6));
+    CHECK (wowParam->getValue() == Catch::Approx (savedWow).margin (1e-6));
+    CHECK (flutterParam->getValue() == Catch::Approx (savedFlutter).margin (1e-6));
     CHECK (hissParam->getValue() == Catch::Approx (savedHiss).margin (1e-6));
     CHECK (characterParam->getValue() == Catch::Approx (savedCharacter).margin (1e-6));
     CHECK (hfTrimParam->getValue() == Catch::Approx (savedHfTrim).margin (1e-6));
     CHECK (lfTrimParam->getValue() == Catch::Approx (savedLfTrim).margin (1e-6));
+}
+
+//==============================================================================
+// docs/design-brief.md §7 / §5 guarantee 8: a v0.1.0-shaped state (single
+// "wow_flutter" PARAM entry, no "wow"/"flutter" entries) must still load
+// without erroring, with both new parameters landing at the old single
+// value rather than silently resetting to 0%.
+TEST_CASE ("State migration: a v0.1.0-shaped state (single wow_flutter PARAM) loads cleanly and maps onto wow/flutter",
+           "[state][migration]")
+{
+    AureateAudioProcessor processor;
+    processor.prepareToPlay (48000.0, 512);
+
+    // A synthetic v0.1.0-shaped APVTS state blob: every v0.1.0 parameter ID
+    // present (including the since-retired "wow_flutter"), but neither
+    // "wow" nor "flutter" (which did not exist in v0.1.0's layout).
+    constexpr const char* legacyStateXml =
+        "<PARAMETERS>"
+        "<PARAM id=\"drive\" value=\"6.0\"/>"
+        "<PARAM id=\"warmth\" value=\"35.0\"/>"
+        "<PARAM id=\"tone\" value=\"0.0\"/>"
+        "<PARAM id=\"mix\" value=\"100.0\"/>"
+        "<PARAM id=\"output\" value=\"0.0\"/>"
+        "<PARAM id=\"bias\" value=\"0.0\"/>"
+        "<PARAM id=\"wow_flutter\" value=\"57.0\"/>"
+        "<PARAM id=\"hiss\" value=\"0.0\"/>"
+        "<PARAM id=\"character\" value=\"0.0\"/>"
+        "<PARAM id=\"hf_trim\" value=\"0.0\"/>"
+        "<PARAM id=\"lf_trim\" value=\"0.0\"/>"
+        "</PARAMETERS>";
+
+    const std::unique_ptr<juce::XmlElement> legacyXml (juce::XmlDocument::parse (juce::String (legacyStateXml)));
+    REQUIRE (legacyXml != nullptr);
+
+    juce::MemoryBlock legacyStateBlock;
+    juce::AudioProcessor::copyXmlToBinary (*legacyXml, legacyStateBlock);
+
+    // Perturb Wow/Flutter first so a no-op/failed load couldn't accidentally
+    // pass the assertions below.
+    auto* wowParam = processor.apvts.getParameter (ParamIDs::wow);
+    auto* flutterParam = processor.apvts.getParameter (ParamIDs::flutter);
+    REQUIRE (wowParam != nullptr);
+    REQUIRE (flutterParam != nullptr);
+    wowParam->setValueNotifyingHost (wowParam->convertTo0to1 (0.0f));
+    flutterParam->setValueNotifyingHost (flutterParam->convertTo0to1 (0.0f));
+
+    CHECK_NOTHROW (processor.setStateInformation (legacyStateBlock.getData(), static_cast<int> (legacyStateBlock.getSize())));
+
+    // Both new parameters land at the old single value - a "recognisable (if
+    // not identical) character" per the brief, not a silent reset to 0%.
+    CHECK (wowParam->convertFrom0to1 (wowParam->getValue()) == Catch::Approx (57.0f).margin (1.0e-3));
+    CHECK (flutterParam->convertFrom0to1 (flutterParam->getValue()) == Catch::Approx (57.0f).margin (1.0e-3));
+
+    // Every other v0.1.0 parameter still loads normally too.
+    auto* driveParam = processor.apvts.getParameter (ParamIDs::drive);
+    REQUIRE (driveParam != nullptr);
+    CHECK (driveParam->convertFrom0to1 (driveParam->getValue()) == Catch::Approx (6.0f).margin (1.0e-3));
+}
+
+TEST_CASE ("State migration: a v0.2.0-shaped state (already carrying wow/flutter) is left untouched by the migration",
+           "[state][migration]")
+{
+    AureateAudioProcessor processor;
+    processor.prepareToPlay (48000.0, 512);
+
+    auto* wowParam = processor.apvts.getParameter (ParamIDs::wow);
+    auto* flutterParam = processor.apvts.getParameter (ParamIDs::flutter);
+    REQUIRE (wowParam != nullptr);
+    REQUIRE (flutterParam != nullptr);
+
+    wowParam->setValueNotifyingHost (wowParam->convertTo0to1 (12.0f));
+    flutterParam->setValueNotifyingHost (flutterParam->convertTo0to1 (88.0f));
+
+    juce::MemoryBlock savedState;
+    processor.getStateInformation (savedState);
+
+    wowParam->setValueNotifyingHost (wowParam->getDefaultValue());
+    flutterParam->setValueNotifyingHost (flutterParam->getDefaultValue());
+
+    processor.setStateInformation (savedState.getData(), static_cast<int> (savedState.getSize()));
+
+    // The migration must not overwrite genuinely different, already-present
+    // wow/flutter values with each other or with anything derived from a
+    // (nonexistent, in a v0.2.0 state) legacy entry.
+    CHECK (wowParam->convertFrom0to1 (wowParam->getValue()) == Catch::Approx (12.0f).margin (1.0e-3));
+    CHECK (flutterParam->convertFrom0to1 (flutterParam->getValue()) == Catch::Approx (88.0f).margin (1.0e-3));
 }

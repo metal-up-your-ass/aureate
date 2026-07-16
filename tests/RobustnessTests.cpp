@@ -49,7 +49,8 @@ TEST_CASE ("Full-scale input at maximum drive produces no NaN/Inf", "[robustness
     setParam (processor, ParamIDs::mix, 100.0f);
     setParam (processor, ParamIDs::output, 24.0f);
     setParam (processor, ParamIDs::bias, 100.0f);
-    setParam (processor, ParamIDs::wowFlutter, 100.0f);
+    setParam (processor, ParamIDs::wow, 100.0f);
+    setParam (processor, ParamIDs::flutter, 100.0f);
     setParam (processor, ParamIDs::hiss, 100.0f);
     setParam (processor, ParamIDs::character, 2.0f); // Valve
     setParam (processor, ParamIDs::hfTrim, 6.0f);
@@ -169,7 +170,8 @@ TEST_CASE ("Extreme parameter values at both range edges produce no NaN/Inf", "[
         setParam (processor, ParamIDs::mix, useMinimum ? 0.0f : 100.0f);
         setParam (processor, ParamIDs::output, useMinimum ? -24.0f : 24.0f);
         setParam (processor, ParamIDs::bias, useMinimum ? -100.0f : 100.0f);
-        setParam (processor, ParamIDs::wowFlutter, useMinimum ? 0.0f : 100.0f);
+        setParam (processor, ParamIDs::wow, useMinimum ? 0.0f : 100.0f);
+        setParam (processor, ParamIDs::flutter, useMinimum ? 0.0f : 100.0f);
         setParam (processor, ParamIDs::hiss, useMinimum ? 0.0f : 100.0f);
         setParam (processor, ParamIDs::character, useMinimum ? 0.0f : 2.0f);
         setParam (processor, ParamIDs::hfTrim, useMinimum ? -6.0f : 6.0f);
@@ -200,7 +202,8 @@ TEST_CASE ("Rapid parameter automation across many blocks produces no NaN/Inf", 
         setParam (processor, ParamIDs::mix, unit (rng) * 100.0f);
         setParam (processor, ParamIDs::output, -24.0f + unit (rng) * 48.0f);
         setParam (processor, ParamIDs::bias, -100.0f + unit (rng) * 200.0f);
-        setParam (processor, ParamIDs::wowFlutter, unit (rng) * 100.0f);
+        setParam (processor, ParamIDs::wow, unit (rng) * 100.0f);
+        setParam (processor, ParamIDs::flutter, unit (rng) * 100.0f);
         setParam (processor, ParamIDs::hiss, unit (rng) * 100.0f);
         setParam (processor, ParamIDs::character, std::floor (unit (rng) * 3.0f));
         setParam (processor, ParamIDs::hfTrim, -6.0f + unit (rng) * 12.0f);

@@ -57,7 +57,7 @@ TEST_CASE ("Processor instantiates with the expected parameters", "[processor][p
     {
         static constexpr const char* allIds[] = {
             ParamIDs::drive, ParamIDs::warmth, ParamIDs::tone, ParamIDs::mix, ParamIDs::output,
-            ParamIDs::bias, ParamIDs::wowFlutter, ParamIDs::hiss, ParamIDs::character,
+            ParamIDs::bias, ParamIDs::wow, ParamIDs::flutter, ParamIDs::hiss, ParamIDs::character,
             ParamIDs::hfTrim, ParamIDs::lfTrim,
         };
 
@@ -65,9 +65,20 @@ TEST_CASE ("Processor instantiates with the expected parameters", "[processor][p
             CHECK (apvts.getParameter (id) != nullptr);
     }
 
-    SECTION ("total parameter count matches the v0.1.0 layout")
+    SECTION ("the retired v0.1.0 wow_flutter ID is no longer a live parameter")
     {
-        CHECK (apvts.processor.getParameters().size() == 11);
+        // Superseded by wow/flutter (docs/design-brief.md §3.6) - still a
+        // named constant (ParamIDs::legacyWowFlutter) purely for the state
+        // migration in PluginProcessor.cpp, never registered as an APVTS
+        // parameter in v0.2.0's layout.
+        CHECK (apvts.getParameter (ParamIDs::legacyWowFlutter) == nullptr);
+    }
+
+    SECTION ("total parameter count matches the v0.2.0 layout")
+    {
+        // v0.1.0's 11 parameters, minus the single wow_flutter, plus the two
+        // independent wow/flutter parameters that replaced it: 11 - 1 + 2 = 12.
+        CHECK (apvts.processor.getParameters().size() == 12);
     }
 
     SECTION ("Drive: saturator input gain defaults and range")
@@ -106,10 +117,16 @@ TEST_CASE ("Processor instantiates with the expected parameters", "[processor][p
         checkFloatRange (apvts, ParamIDs::bias, -100.0f, 100.0f);
     }
 
-    SECTION ("Wow/Flutter: tape-transport instability defaults and range")
+    SECTION ("Wow: tape-transport pitch-drift instability defaults and range")
     {
-        checkFloatDefault (apvts, ParamIDs::wowFlutter, 0.0f);
-        checkFloatRange (apvts, ParamIDs::wowFlutter, 0.0f, 100.0f);
+        checkFloatDefault (apvts, ParamIDs::wow, 0.0f);
+        checkFloatRange (apvts, ParamIDs::wow, 0.0f, 100.0f);
+    }
+
+    SECTION ("Flutter: tape-transport shimmer instability defaults and range")
+    {
+        checkFloatDefault (apvts, ParamIDs::flutter, 0.0f);
+        checkFloatRange (apvts, ParamIDs::flutter, 0.0f, 100.0f);
     }
 
     SECTION ("Hiss: noise-floor amount defaults and range")

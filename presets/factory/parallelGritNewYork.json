@@ -1,0 +1,21 @@
+{
+    "format": "basilica-preset-1",
+    "plugin": "com.yvesvogl.aureate",
+    "pluginVersion": "0.2.0",
+    "name": "Parallel Grit (New York)",
+    "category": "Bus",
+    "parameters": {
+        "character": 2,
+        "drive": 20.0,
+        "warmth": 80.0,
+        "bias": 0.0,
+        "tone": 0.0,
+        "hf_trim": 0.0,
+        "lf_trim": 0.0,
+        "wow": 0.0,
+        "flutter": 0.0,
+        "hiss": 0.0,
+        "mix": 50.0,
+        "output": -3.0
+    }
+}

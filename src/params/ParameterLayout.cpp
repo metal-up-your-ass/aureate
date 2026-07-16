@@ -72,12 +72,21 @@ namespace aur
             juce::AudioParameterFloatAttributes().withLabel ("%")));
 
         //======================================================================
-        // Wow/Flutter: tape-transport speed instability amount. Default 0% -
+        // Wow / Flutter: independent tape-transport speed-instability
+        // amounts (v0.2.0 - split from v0.1.0's single joint "Wow/Flutter"
+        // proportion, see docs/design-brief.md §3.6). Both default to 0% -
         // off, so the plugin stays a clean glue processor unless this
         // character is deliberately engaged.
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { ParamIDs::wowFlutter, 1 },
-            "Wow/Flutter",
+            juce::ParameterID { ParamIDs::wow, 1 },
+            "Wow",
+            juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f),
+            0.0f,
+            juce::AudioParameterFloatAttributes().withLabel ("%")));
+
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { ParamIDs::flutter, 1 },
+            "Flutter",
             juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f),
             0.0f,
             juce::AudioParameterFloatAttributes().withLabel ("%")));
