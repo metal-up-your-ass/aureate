@@ -321,7 +321,7 @@ TEST_CASE ("Design brief v2: Hiss stays off at 0% and keeps its documented peak 
 // 9. Character-dependent bias ceiling regression: setWarmthProportion(1.0)
 // under each Character model produces the new per-model max bias (0.12
 // Tape / 0.10 Console / 0.30 Valve), not the old shared 0.3.
-TEST_CASE ("Design brief v2: characterMaxWarmthBias() matches the brief's §3.3 table exactly",
+TEST_CASE ("Design brief v2: characterMaxWarmthBias() matches the brief's section 3.3 table exactly",
            "[dsp][engine][character][designbrief]")
 {
     CHECK (AureateEngine::characterMaxWarmthBias (TapeSaturator::Model::tape) == Catch::Approx (0.12f));
