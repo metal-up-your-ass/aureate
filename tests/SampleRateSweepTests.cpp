@@ -109,7 +109,8 @@ TEST_CASE ("Sample-rate sweep: full-chain processing at maximum drive/warmth/bia
         engine.setWarmthProportion (1.0f);
         engine.setToneProportion (1.0f);
         engine.setBiasProportion (1.0f);
-        engine.setWowFlutterProportion (1.0f);
+        engine.setWowProportion (1.0f);
+        engine.setFlutterProportion (1.0f);
         engine.setHissProportion (1.0f);
         engine.setHfTrimDb (6.0f);
         engine.setLfTrimDb (6.0f);

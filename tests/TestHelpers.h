@@ -1,11 +1,11 @@
 #pragma once
 
 #include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_dsp/juce_dsp.h>
 
 #include <cmath>
 
-// Small shared helpers used across the Tests target. Kept dependency-free
-// (just juce_audio_basics) so it can be included from any test file.
+// Small shared helpers used across the Tests target.
 namespace TestHelpers
 {
     // Fills every channel of the buffer with a sine wave of the given
@@ -129,6 +129,63 @@ namespace TestHelpers
 
         const auto denominator = std::sqrt (varianceA * varianceB);
         return denominator > 0.0 ? covariance / denominator : 0.0;
+    }
+
+    // Goertzel algorithm: the magnitude of a single frequency bin's DFT
+    // component, without computing a full FFT. `targetFrequencyHz` should be
+    // an exact multiple of sampleRate/numSamples (i.e. land on an integer
+    // bin) for a leakage-free reading against a periodic test tone - used by
+    // the Character harmonic-balance test (tests/CharacterHarmonicTests.cpp)
+    // to measure H2/H3 energy directly from engine output. Magnitude is
+    // insensitive to a constant phase/delay offset in the input, so callers
+    // don't need to account for the plugin's own reported latency here.
+    inline double goertzelMagnitude (const float* data, int numSamples, double sampleRate, double targetFrequencyHz)
+    {
+        const auto k = std::round (static_cast<double> (numSamples) * targetFrequencyHz / sampleRate);
+        const auto omega = juce::MathConstants<double>::twoPi * k / static_cast<double> (numSamples);
+        const auto cosine = std::cos (omega);
+        const auto coeff = 2.0 * cosine;
+
+        double q0 = 0.0, q1 = 0.0, q2 = 0.0;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            q0 = coeff * q1 - q2 + static_cast<double> (data[i]);
+            q2 = q1;
+            q1 = q0;
+        }
+
+        const auto sine = std::sin (omega);
+        const auto real = q1 - q2 * cosine;
+        const auto imag = q2 * sine;
+
+        return std::sqrt (real * real + imag * imag);
+    }
+
+    // RMS level of `buffer` after passing it through a 2nd-order Butterworth
+    // band-pass filter centred at `centerHz` with the given Q - used by the
+    // Hiss spectral-tilt test (tests/DesignBriefV2Tests.cpp) to compare noise
+    // energy in a low band versus a high band. Operates on a copy, leaving
+    // `buffer` untouched; not real-time safe (allocates), test-only.
+    inline double bandpassRms (const juce::AudioBuffer<float>& buffer, double sampleRate, float centerHz, float q)
+    {
+        juce::AudioBuffer<float> filtered;
+        filtered.makeCopyOf (buffer);
+
+        // ProcessorDuplicator (not a bare juce::dsp::IIR::Filter), so each
+        // channel gets its own independent filter state - a bare Filter
+        // instance shares one set of state variables across every channel of
+        // a multichannel ProcessContext, which would corrupt stereo input.
+        juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>, juce::dsp::IIR::Coefficients<float>> filter;
+        filter.prepare (juce::dsp::ProcessSpec { sampleRate, static_cast<juce::uint32> (filtered.getNumSamples()),
+                                                  static_cast<juce::uint32> (filtered.getNumChannels()) });
+        *filter.state = *juce::dsp::IIR::Coefficients<float>::makeBandPass (sampleRate, centerHz, q);
+
+        juce::dsp::AudioBlock<float> block (filtered);
+        juce::dsp::ProcessContextReplacing<float> context (block);
+        filter.process (context);
+
+        return rms (filtered);
     }
 
     // Best Pearson correlation across a small range of sample-alignment

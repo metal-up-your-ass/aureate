@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "dsp/AureateEngine.h"
+#include "presets/PresetManager.h"
 
 // Aureate: tape/console saturation "glue" for orchestral material. Signal
 // flow lives in AureateEngine (src/dsp) so it stays unit-testable
@@ -51,6 +52,14 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    // M2 preset system (.scaffold/specs/preset-system-m2.md,
+    // src/presets/PresetManager.h). Constructed after apvts (its
+    // constructor registers APVTS parameter listeners) and public so
+    // AureateAudioProcessorEditor's PresetBar can talk to it directly - the
+    // same "processor owns it, editor references it" pattern apvts itself
+    // already uses.
+    basilica::presets::PresetManager presetManager;
+
 private:
     AureateEngine engine;
 
@@ -63,7 +72,8 @@ private:
     std::atomic<float>* mixPercent = nullptr;
     std::atomic<float>* outputDb = nullptr;
     std::atomic<float>* biasPercent = nullptr;
-    std::atomic<float>* wowFlutterPercent = nullptr;
+    std::atomic<float>* wowPercent = nullptr;
+    std::atomic<float>* flutterPercent = nullptr;
     std::atomic<float>* hissPercent = nullptr;
     std::atomic<float>* characterIndex = nullptr;
     std::atomic<float>* hfTrimDb = nullptr;

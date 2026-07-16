@@ -38,11 +38,23 @@ namespace ParamIDs
     // single-ended character without disturbing Warmth's HF-rolloff amount.
     inline constexpr auto bias = "bias";
 
-    // Amount of tape-transport speed instability (slow "wow" + faster
-    // "flutter" pitch modulation) applied to the wet path via a modulated
-    // delay line. 0% is a fixed (non-modulated) delay - see AureateEngine
-    // for why a small fixed delay is always present regardless of amount.
-    inline constexpr auto wowFlutter = "wow_flutter";
+    // v0.2.0 (docs/design-brief.md §3.6): the single v0.1.0 "Wow/Flutter"
+    // proportion was split into two independent amounts - a slow tape-
+    // transport pitch "wow" and a faster "flutter" shimmer - applied to the
+    // wet path via a shared modulated delay line. 0% on both is a fixed
+    // (non-modulated) delay - see AureateEngine for why a small fixed delay
+    // is always present regardless of either amount.
+    inline constexpr auto wow = "wow";
+    inline constexpr auto flutter = "flutter";
+
+    // FROZEN, retired v0.1.0 parameter ID - NOT a live APVTS parameter in
+    // v0.2.0's ParameterLayout (superseded by wow/flutter above). Kept as a
+    // named constant purely so AureateAudioProcessor::setStateInformation()'s
+    // v0.1.0->v0.2.0 state migration can recognise a pre-split saved state
+    // (a single <PARAM id="wow_flutter" .../> entry) and map it onto both new
+    // parameters at the same value (docs/design-brief.md §7's migration
+    // policy) rather than silently resetting Wow/Flutter to 0% on load.
+    inline constexpr auto legacyWowFlutter = "wow_flutter";
 
     // Amount of shaped noise ("tape hiss") mixed into the wet path inside
     // the oversampled domain, after the saturator/tone stages and before

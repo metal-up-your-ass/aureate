@@ -1,0 +1,21 @@
+{
+    "format": "basilica-preset-1",
+    "plugin": "com.yvesvogl.aureate",
+    "pluginVersion": "0.2.0",
+    "name": "Vintage Tape Pad",
+    "category": "FX",
+    "parameters": {
+        "character": 0,
+        "drive": 10.0,
+        "warmth": 70.0,
+        "bias": -10.0,
+        "tone": -10.0,
+        "hf_trim": 0.0,
+        "lf_trim": 2.0,
+        "wow": 20.0,
+        "flutter": 15.0,
+        "hiss": 25.0,
+        "mix": 100.0,
+        "output": -1.0
+    }
+}

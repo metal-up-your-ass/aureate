@@ -1,0 +1,21 @@
+{
+    "format": "basilica-preset-1",
+    "plugin": "com.yvesvogl.aureate",
+    "pluginVersion": "0.2.0",
+    "name": "String Section Glue",
+    "category": "Bus",
+    "parameters": {
+        "character": 0,
+        "drive": 5.0,
+        "warmth": 30.0,
+        "bias": 0.0,
+        "tone": 5.0,
+        "hf_trim": 0.0,
+        "lf_trim": 0.0,
+        "wow": 0.0,
+        "flutter": 0.0,
+        "hiss": 0.0,
+        "mix": 100.0,
+        "output": 0.0
+    }
+}

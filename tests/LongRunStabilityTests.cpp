@@ -51,7 +51,8 @@ TEST_CASE ("Long-run stability: several seconds of continuous processing with sl
         setParam (processor, ParamIDs::warmth, 50.0f + 50.0f * std::sin (t * 4.3f));
         setParam (processor, ParamIDs::tone, 100.0f * std::sin (t * 3.1f));
         setParam (processor, ParamIDs::bias, 100.0f * std::sin (t * 2.2f));
-        setParam (processor, ParamIDs::wowFlutter, 50.0f + 50.0f * std::sin (t * 1.7f));
+        setParam (processor, ParamIDs::wow, 50.0f + 50.0f * std::sin (t * 1.7f));
+        setParam (processor, ParamIDs::flutter, 50.0f + 50.0f * std::sin (t * 2.1f));
         setParam (processor, ParamIDs::hiss, 50.0f + 50.0f * std::sin (t * 5.9f));
         setParam (processor, ParamIDs::hfTrim, 6.0f * std::sin (t * 3.7f));
         setParam (processor, ParamIDs::lfTrim, 6.0f * std::sin (t * 2.9f));
@@ -89,7 +90,8 @@ TEST_CASE ("Long-run stability: silence held for several seconds at maximum Hiss
     setParam (processor, ParamIDs::warmth, 100.0f);
     setParam (processor, ParamIDs::bias, 100.0f);
     setParam (processor, ParamIDs::hiss, 100.0f);
-    setParam (processor, ParamIDs::wowFlutter, 100.0f);
+    setParam (processor, ParamIDs::wow, 100.0f);
+    setParam (processor, ParamIDs::flutter, 100.0f);
     setParam (processor, ParamIDs::mix, 100.0f);
 
     juce::MidiBuffer midi;

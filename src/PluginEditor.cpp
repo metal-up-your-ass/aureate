@@ -1,6 +1,9 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "params/ParameterIds.h"
+#include "presets/Localisation.h"
+
+#include <BinaryData.h>
 
 namespace
 {
@@ -10,18 +13,39 @@ namespace
     constexpr int margin = 16;
     constexpr int slotWidth = knobSize + margin;
     constexpr int columns = 6;
-    constexpr int numControls = 11;
+    constexpr int numControls = 12;
     constexpr int rows = (numControls + columns - 1) / columns; // ceil
+    constexpr int presetBarHeight = 28;
     constexpr int editorWidth = margin * 2 + columns * slotWidth - margin;
-    constexpr int editorHeight = margin * 2 + rows * (labelHeight + knobSize + textBoxHeight + margin) - margin;
+    constexpr int editorHeight = margin * 2 + presetBarHeight + margin + rows * (labelHeight + knobSize + textBoxHeight + margin) - margin;
+
+    // M2 i18n frame (.scaffold/specs/preset-system-m2.md): selects German
+    // (resources/i18n/de.txt) or falls through to English, once, at editor
+    // construction - see Localisation.h's docs. `presetBar` is a member
+    // initialised via the constructor's initialiser list, and its own
+    // constructor already calls TRANS() on every button label - member
+    // initialisers run in declaration order regardless of the order they're
+    // written in, so this helper (called from presetBar's own initialiser
+    // expression below) is what actually guarantees installLocalisation()
+    // runs before presetBar exists, not an installLocalisation() call in the
+    // constructor *body*, which would run too late.
+    basilica::presets::PresetManager& initLocalisationThenGetPresetManager (AureateAudioProcessor& processor)
+    {
+        basilica::presets::installLocalisation (BinaryData::de_txt, BinaryData::de_txtSize);
+        return processor.presetManager;
+    }
 }
 
 AureateAudioProcessorEditor::AureateAudioProcessorEditor (AureateAudioProcessor& processorToEdit)
     : juce::AudioProcessorEditor (&processorToEdit),
-      audioProcessor (processorToEdit)
+      audioProcessor (processorToEdit),
+      presetBar (initLocalisationThenGetPresetManager (processorToEdit))
 {
+    addAndMakeVisible (presetBar);
+
     // Signal-flow order (see docs/architecture.md).
-    configureKnob (wowFlutterKnob, ParamIDs::wowFlutter, "Wow/Flutter");
+    configureKnob (wowKnob, ParamIDs::wow, "Wow");
+    configureKnob (flutterKnob, ParamIDs::flutter, "Flutter");
     configureKnob (driveKnob, ParamIDs::drive, "Drive");
     configureKnob (warmthKnob, ParamIDs::warmth, "Warmth");
     configureKnob (biasKnob, ParamIDs::bias, "Bias");
@@ -74,6 +98,10 @@ void AureateAudioProcessorEditor::configureChoice (Choice& choice, const juce::S
 void AureateAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (margin);
+
+    presetBar.setBounds (bounds.removeFromTop (presetBarHeight));
+    bounds.removeFromTop (margin);
+
     bounds.removeFromTop (labelHeight); // room for the attached labels above each control
 
     // A simple wrapping grid, `columns` wide, in signal-flow order. Controls
@@ -95,7 +123,7 @@ void AureateAudioProcessorEditor::resized()
     };
 
     int index = 0;
-    for (auto* knob : { &wowFlutterKnob, &driveKnob, &warmthKnob, &biasKnob })
+    for (auto* knob : { &wowKnob, &flutterKnob, &driveKnob, &warmthKnob, &biasKnob })
         placeInGrid (knob->slider, index++, knobSize + textBoxHeight);
 
     placeInGrid (characterChoice.box, index++, textBoxHeight);
