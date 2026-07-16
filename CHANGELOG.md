@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-16
+
+### Changed
+
+- Housekeeping: canonical squircle icon cutout embedded into the plugin binary (`ICON_BIG`) and README/manual, org link sweep, heavy-music copy reframe, README pointed at GitHub Releases, and the signed tag-triggered release CI workflow added.
+
 ### Fixed
 
 - Warmth low-pass smoother now ramps over the documented ~50ms instead of ~200ms: `warmthLowPassHzSmoothed` was `reset()` at the oversampled rate (`sampleRate * 4`) while `process()` always advances it via `skip()` with host-rate sample counts, giving it 4x the intended `stepsToTarget` (#12).
